@@ -1,5 +1,5 @@
-const ORDER_ENDPOINT = ''; // Google Apps Script web app URL (fill later)
-const USE_WEBHOOK = false; // set to true when endpoint is ready
+// Укажите ссылку на ваш Google Apps Script Web App (Webhook):
+export const GOOGLE_SHEET_WEBHOOK_URL = ''; 
 
 /**
  * Generates a random order number like 'HML-123456'
@@ -10,45 +10,55 @@ export function generateOrderNumber() {
 }
 
 /**
- * Submits the order either to a webhook or local storage
- * @param {Object} orderData { items, total, customer, paymentMethod }
+ * Submits the order to Google Sheets (if webhook configured) and localStorage
+ * @param {Object} orderData { orderNumber, name, phone, email, city, address, comment, paymentMethod, items, total }
  */
 export async function submitOrder(orderData) {
-  const orderNumber = generateOrderNumber();
-  const finalOrder = {
-    ...orderData,
-    orderNumber,
-    date: new Date().toISOString()
+  const dateStr = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Almaty' });
+
+  // Форматируем список товаров в читаемую строку для таблицы
+  const itemsSummary = (orderData.items || [])
+    .map(i => `${i.product.name} (x${i.quantity}) - ${i.product.price * i.quantity} ₸`)
+    .join('; ');
+
+  const paymentText = {
+    cash: 'Наличными при получении',
+    card: 'Банковская карта / Google Pay (Онлайн)',
+    installment: 'Рассрочка / Kaspi Pay'
+  }[orderData.paymentMethod] || orderData.paymentMethod || 'Наличными';
+
+  const payload = {
+    date: dateStr,
+    orderNumber: orderData.orderNumber,
+    customerName: orderData.name || '',
+    phone: orderData.phone || '',
+    email: orderData.email || '',
+    city: orderData.city || '',
+    address: orderData.address || '',
+    comment: orderData.comment || '',
+    paymentMethod: paymentText,
+    items: itemsSummary,
+    total: `${orderData.total} ₸`
   };
 
-  if (USE_WEBHOOK && ORDER_ENDPOINT) {
+  saveOrderToLocal({ ...orderData, payload, createdAt: dateStr });
+
+  if (GOOGLE_SHEET_WEBHOOK_URL && GOOGLE_SHEET_WEBHOOK_URL.trim() !== '') {
     try {
-      const response = await fetch(ORDER_ENDPOINT, {
+      // Отправляем данные в Google Таблицу через Google Apps Script
+      await fetch(GOOGLE_SHEET_WEBHOOK_URL.trim(), {
         method: 'POST',
+        mode: 'no-cors', // Позволяет отправлять данные в Apps Script без блокировок CORS
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(finalOrder)
+        body: JSON.stringify(payload)
       });
-      
-      if (!response.ok) throw new Error('Network response was not ok');
-      
-      saveOrderToLocal(finalOrder);
-      return { success: true, orderNumber, message: 'Заказ успешно оформлен' };
+      console.log('Order sent to Google Sheet Webhook:', payload);
     } catch (error) {
-      console.error('Error submitting order to webhook:', error);
-      return { success: false, orderNumber: null, message: 'Ошибка при отправке заказа' };
+      console.error('Error sending order to Google Sheets:', error);
     }
-  } else {
-    // Local fallback
-    saveOrderToLocal(finalOrder);
-    console.log('Order submitted locally:', finalOrder);
-    
-    // Simulate network delay
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve({ success: true, orderNumber, message: 'Заказ успешно сохранен локально' });
-      }, 800);
-    });
   }
+
+  return { success: true, orderNumber: orderData.orderNumber };
 }
 
 /**
@@ -69,3 +79,4 @@ function saveOrderToLocal(order) {
   orders.push(order);
   localStorage.setItem('homely_orders', JSON.stringify(orders));
 }
+
