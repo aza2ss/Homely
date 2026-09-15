@@ -1,5 +1,6 @@
 // Укажите ссылку на ваш Google Apps Script Web App (Webhook):
-export const GOOGLE_SHEET_WEBHOOK_URL = ''; 
+export const GOOGLE_SHEET_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyZ8EpbSCWCYmf4nA6HRGr5dKlVjPcHYlhoP8xLslF0eDogDEHV1jOZVqiA6vqijC0/exec';
+ 
 
 /**
  * Generates a random order number like 'HML-123456'
